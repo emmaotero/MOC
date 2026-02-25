@@ -519,6 +519,10 @@ with col3:
 st.markdown("<br>", unsafe_allow_html=True)
 analizar = st.button("🔍 Analizar ubicación")
 
+# ── Session state init ─────────────────────────────────────────────────────────
+if "resultado" not in st.session_state:
+    st.session_state.resultado = None
+
 # ── Analysis ──────────────────────────────────────────────────────────────────
 if analizar:
     if not google_key:
@@ -538,10 +542,10 @@ if analizar:
 
         lat, lng = coords["lat"], coords["lng"]
 
-        # 2. Buscar datos en paralelo
+        # 2. Buscar datos
         competitors = search_places(lat, lng, radio, rubro, "establishment", google_key)
         transit = get_transit_stops(lat, lng, radio, google_key)
-        barrio = get_barrio_from_coords(lat, lng) or "Palermo"  # fallback
+        barrio = get_barrio_from_coords(lat, lng) or "Palermo"
 
         # 3. Calcular scores
         s_comp, c_comp, d_comp = score_competencia(competitors, radio)
@@ -554,10 +558,35 @@ if analizar:
             [0.35, 0.20, 0.25, 0.20]
         )
 
-        # 4. Insights basados en reglas
         insights = get_key_insights(c_comp, c_trans, c_alq, c_demo, score_total)
 
-    # ── Layout de resultados ──────────────────────────────────────────────────
+        # Guardar todo en session_state
+        st.session_state.resultado = {
+            "coords": coords, "barrio": barrio, "radio": radio,
+            "competitors": competitors, "transit": transit,
+            "score_total": score_total,
+            "c_comp": c_comp, "d_comp": d_comp,
+            "c_trans": c_trans, "d_trans": d_trans,
+            "c_alq": c_alq, "d_alq": d_alq, "precio_m2": precio_m2,
+            "c_demo": c_demo, "d_demo": d_demo,
+            "insights": insights,
+        }
+
+# ── Mostrar resultados desde session_state ────────────────────────────────────
+if st.session_state.resultado:
+    r = st.session_state.resultado
+    coords      = r["coords"]
+    barrio      = r["barrio"]
+    radio_r     = r["radio"]
+    competitors = r["competitors"]
+    transit     = r["transit"]
+    score_total = r["score_total"]
+    c_comp      = r["c_comp"]; d_comp  = r["d_comp"]
+    c_trans     = r["c_trans"]; d_trans = r["d_trans"]
+    c_alq       = r["c_alq"]; d_alq   = r["d_alq"]; precio_m2 = r["precio_m2"]
+    c_demo      = r["c_demo"]; d_demo  = r["d_demo"]
+    insights    = r["insights"]
+    lat, lng    = coords["lat"], coords["lng"]
     st.markdown(f"<div style='color:#666; font-size:0.85rem; margin-bottom:1.5rem'>📌 {coords['formatted']} · Barrio: <b style='color:#aaa'>{barrio}</b></div>", unsafe_allow_html=True)
 
     left, right = st.columns([2, 3])
@@ -595,7 +624,7 @@ if analizar:
         st.markdown(layer_card(
             "Competencia",
             c_comp,
-            f"{len(competitors)} locales en {radio}m",
+            f"{len(competitors)} locales en {radio_r}m",
             d_comp
         ), unsafe_allow_html=True)
 
