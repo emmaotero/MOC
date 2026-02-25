@@ -557,6 +557,9 @@ analizar = st.button("🔍 Analizar ubicación")
 # ── Session state init ─────────────────────────────────────────────────────────
 if "resultado" not in st.session_state:
     st.session_state.resultado = None
+# Resetear si el resultado es de una versión anterior (no tiene rubro_label)
+if st.session_state.resultado and "rubro_label" not in st.session_state.resultado:
+    st.session_state.resultado = None
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 if analizar:
@@ -614,7 +617,7 @@ if st.session_state.resultado:
     coords      = r["coords"]
     barrio      = r["barrio"]
     radio_r     = r["radio"]
-    rubro_label = r["rubro_label"]
+    rubro_label = r.get("rubro_label", "")
     competitors = r["competitors"]
     transit     = r["transit"]
     score_total = r["score_total"]
