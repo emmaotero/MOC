@@ -585,6 +585,24 @@ if analizar:
         transit = get_transit_stops(lat, lng, radio, google_key)
         barrio = get_barrio_from_coords(lat, lng) or "Palermo"
 
+        # DEBUG temporal — borrar una vez que funcione
+        with st.expander("🔍 Debug — qué le mandamos a Google y qué responde"):
+            st.write(f"**Coordenadas:** {lat}, {lng}")
+            st.write(f"**Barrio detectado:** {barrio}")
+            st.write(f"**Rubro type:** `{rubro_config['type']}` | keyword: `{rubro_config['keyword']}`")
+            st.write(f"**Radio:** {radio}m")
+            st.write(f"**Competidores encontrados:** {len(competitors)}")
+            if competitors:
+                st.write("Primeros 3:", [p.get("name") for p in competitors[:3]])
+            else:
+                # Hacer la llamada cruda para ver el status de Google
+                url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+                params = {"location": f"{lat},{lng}", "radius": radio, "type": rubro_config["type"], "key": google_key, "language": "es"}
+                r_debug = requests.get(url, params=params, timeout=10)
+                st.write("**Respuesta cruda de Google:**", r_debug.json().get("status"), r_debug.json().get("error_message", ""))
+        transit = get_transit_stops(lat, lng, radio, google_key)
+        barrio = get_barrio_from_coords(lat, lng) or "Palermo"
+
         # 3. Calcular scores
         s_comp, c_comp, d_comp = score_competencia(competitors, radio)
         s_trans, c_trans, d_trans = score_transporte(transit, radio)
