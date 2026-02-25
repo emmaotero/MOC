@@ -214,11 +214,13 @@ def search_places(lat: float, lng: float, radius: int, keyword: str, place_type:
     params = {
         "location": f"{lat},{lng}",
         "radius": radius,
-        "keyword": keyword,
-        "type": place_type,
         "key": api_key,
         "language": "es"
     }
+    if place_type:
+        params["type"] = place_type
+    if keyword:
+        params["keyword"] = keyword
     r = requests.get(url, params=params, timeout=10)
     data = r.json()
     return data.get("results", [])
@@ -480,6 +482,38 @@ def build_map(lat, lng, radius, competitors, transit_stops):
     return m
 
 
+# ─── CATÁLOGO DE RUBROS ──────────────────────────────────────────────────────────
+# Cada rubro tiene: label visible, google_type (tipo nativo Places API), keyword extra
+RUBROS = {
+    # Gastronomía
+    "☕ Cafetería / Café":           {"type": "cafe",                  "keyword": "cafeteria cafe"},
+    "🍽️ Restaurant / Resto":        {"type": "restaurant",            "keyword": ""},
+    "🍕 Pizzería / Delivery":        {"type": "restaurant",            "keyword": "pizzeria delivery"},
+    "🥐 Panadería / Confitería":     {"type": "bakery",                "keyword": "panaderia confiteria"},
+    "🍦 Heladería":                  {"type": "ice_cream_shop",        "keyword": "heladeria"},
+    "🍺 Bar / Cervecería":           {"type": "bar",                   "keyword": "bar cerveceria"},
+    # Comercio
+    "👗 Ropa / Indumentaria":        {"type": "clothing_store",        "keyword": "ropa indumentaria"},
+    "👟 Calzado / Zapatería":        {"type": "shoe_store",            "keyword": "zapateria calzado"},
+    "💄 Perfumería / Cosmética":     {"type": "beauty_supply",         "keyword": "perfumeria cosmetica"},
+    "🛒 Almacén / Minimercado":      {"type": "convenience_store",     "keyword": "almacen kiosco"},
+    "🌿 Verdulería / Frutería":      {"type": "grocery_or_supermarket","keyword": "verduleria fruteria"},
+    "🥩 Carnicería":                 {"type": "grocery_or_supermarket","keyword": "carniceria"},
+    "🔧 Ferretería":                 {"type": "hardware_store",        "keyword": "ferreteria"},
+    "📱 Electrónica / Celulares":    {"type": "electronics_store",     "keyword": "celulares electronica"},
+    "📚 Librería / Papelería":       {"type": "book_store",            "keyword": "libreria papeleria"},
+    "🌸 Floristería":                {"type": "florist",               "keyword": "floreria"},
+    "🐾 Veterinaria / Pet shop":     {"type": "veterinary_care",       "keyword": "veterinaria pet shop"},
+    # Servicios
+    "💊 Farmacia":                   {"type": "pharmacy",              "keyword": ""},
+    "💈 Peluquería / Barbería":      {"type": "hair_care",             "keyword": "peluqueria barberia"},
+    "💅 Estética / Nail bar":        {"type": "beauty_salon",          "keyword": "estetica nail"},
+    "🏋️ Gimnasio / Fitness":        {"type": "gym",                   "keyword": "gimnasio fitness"},
+    "🧺 Lavandería / Tintorería":    {"type": "laundry",               "keyword": "lavanderia tintoreria"},
+    "🖨️ Imprenta / Fotocopiadora":  {"type": "store",                 "keyword": "imprenta fotocopiadora"},
+    "🏥 Centro médico / Clínica":    {"type": "doctor",                "keyword": "clinica medico"},
+}
+
 # ─── UI ─────────────────────────────────────────────────────────────────────────
 
 st.markdown("""
@@ -511,7 +545,8 @@ with col1:
     direccion = st.text_input("📍 Dirección", placeholder="Ej: Av. Corrientes 1500, CABA")
 
 with col2:
-    rubro = st.text_input("🏪 Rubro del negocio", placeholder="Ej: cafetería, ferretería, ropa")
+    rubro_label = st.selectbox("🏪 Rubro del negocio", options=list(RUBROS.keys()))
+    rubro_config = RUBROS[rubro_label]
 
 with col3:
     radio = st.slider("Radio (m)", min_value=200, max_value=1500, value=500, step=100)
@@ -528,8 +563,8 @@ if analizar:
     if not google_key:
         st.error("⚠️ Ingresá tu Google Places API key en el panel lateral para continuar.")
         st.stop()
-    if not direccion or not rubro:
-        st.error("⚠️ Completá la dirección y el rubro.")
+    if not direccion:
+        st.error("⚠️ Completá la dirección.")
         st.stop()
 
     with st.spinner("Analizando ubicación..."):
@@ -543,15 +578,15 @@ if analizar:
         lat, lng = coords["lat"], coords["lng"]
 
         # 2. Buscar datos
-        competitors = search_places(lat, lng, radio, rubro, "establishment", google_key)
+        competitors = search_places(lat, lng, radio, rubro_config["keyword"], rubro_config["type"], google_key)
         transit = get_transit_stops(lat, lng, radio, google_key)
         barrio = get_barrio_from_coords(lat, lng) or "Palermo"
 
         # 3. Calcular scores
         s_comp, c_comp, d_comp = score_competencia(competitors, radio)
         s_trans, c_trans, d_trans = score_transporte(transit, radio)
-        s_alq, c_alq, d_alq, precio_m2 = score_alquiler(barrio, rubro)
-        s_demo, c_demo, d_demo = score_demografia(barrio, rubro)
+        s_alq, c_alq, d_alq, precio_m2 = score_alquiler(barrio, rubro_label)
+        s_demo, c_demo, d_demo = score_demografia(barrio, rubro_label)
 
         score_total = global_score(
             [s_comp, s_trans, s_alq, s_demo],
@@ -563,6 +598,7 @@ if analizar:
         # Guardar todo en session_state
         st.session_state.resultado = {
             "coords": coords, "barrio": barrio, "radio": radio,
+            "rubro_label": rubro_label,
             "competitors": competitors, "transit": transit,
             "score_total": score_total,
             "c_comp": c_comp, "d_comp": d_comp,
@@ -578,6 +614,7 @@ if st.session_state.resultado:
     coords      = r["coords"]
     barrio      = r["barrio"]
     radio_r     = r["radio"]
+    rubro_label = r["rubro_label"]
     competitors = r["competitors"]
     transit     = r["transit"]
     score_total = r["score_total"]
@@ -587,7 +624,7 @@ if st.session_state.resultado:
     c_demo      = r["c_demo"]; d_demo  = r["d_demo"]
     insights    = r["insights"]
     lat, lng    = coords["lat"], coords["lng"]
-    st.markdown(f"<div style='color:#666; font-size:0.85rem; margin-bottom:1.5rem'>📌 {coords['formatted']} · Barrio: <b style='color:#aaa'>{barrio}</b></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='color:#666; font-size:0.85rem; margin-bottom:1.5rem'>📌 {coords['formatted']} · Barrio: <b style='color:#aaa'>{barrio}</b> · Rubro: <b style='color:#aaa'>{rubro_label}</b></div>", unsafe_allow_html=True)
 
     left, right = st.columns([2, 3])
 
